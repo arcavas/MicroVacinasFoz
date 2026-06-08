@@ -558,9 +558,17 @@ function carregarDados(){
 // GEOJSON
 // =====================
 
-fetch(
-'UBSMicroplanejamentoGeojson_clean.geojson'
-)
+fetch('ubsmicroplanejamentogeojson_clean.geojson')
+
+.then(response => response.text())
+
+.then(text => {
+
+    console.log("Primeiros caracteres:");
+
+    console.log(text.substring(0,300));
+
+});
 
 .then(
 response =>
