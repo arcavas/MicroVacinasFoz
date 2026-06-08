@@ -30,13 +30,13 @@ html, body {
 
     z-index: 1000;
 
-    background: rgb(47, 131, 183);
+    background: rgb(47,131,183);
 
     padding: 10px;
 
     border-radius: 5px;
 
-    box-shadow: 0 0 5px rgba(0, 0, 0, 0.766);
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
 
 }
 
@@ -55,29 +55,7 @@ html, body {
 
 <div id="controle">
 
-<select id="indicador">
-
-<option value="Drop_Penta">
-Drop_Penta
-</option>
-
-<option value="DadosAPS_A">
-DadosAPS_A
-</option>
-
-<option value="DadosAPS_S">
-DadosAPS_S
-</option>
-
-<option value="DadosAPS_E">
-DadosAPS_E
-</option>
-
-<option value="DadosAPS_F">
-Faixa etária APS
-</option>
-
-</select>
+<select id="indicador"></select>
 
 </div>
 
@@ -89,13 +67,9 @@ Faixa etária APS
 
 <script>
 
-// ======================================
+// =====================================
 // MAPA
-// ======================================
-
-// =====================
-// MAPA
-// =====================
+// =====================================
 
 var map = L.map('map').setView(
     [-25.54, -54.58],
@@ -105,13 +79,13 @@ var map = L.map('map').setView(
 L.tileLayer(
 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
 {
- attribution:'© OpenStreetMap'
+    attribution:'© OpenStreetMap'
 }
 ).addTo(map);
 
-// =====================
+// =====================================
 // VARIÁVEIS GLOBAIS
-// =====================
+// =====================================
 
 let indicadores = {};
 
@@ -121,40 +95,52 @@ let camadaUBS = null;
 
 let indicadorAtual = null;
 
-// =====================
+// =====================================
 // PLANILHA
-// =====================
+// =====================================
 
 const csvUrl =
 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ83nMaB8cLLAZEwAicEhPeiuVPd89zsqMrS4T6-BtLNIYsH7LsU2jafFd4_OIDoULHl0Vv6raOBEG3/pub?gid=1960672355&single=true&output=csv';
 
-// =====================
-// DETECTAR TIPO
-// =====================
+// =====================================
+// DETECTAR NUMÉRICO
+// =====================================
 
 function ehNumerico(indicador){
 
-    let amostra =
-        Object.values(indicadores)[0];
+    let valores =
+        Object.values(indicadores);
 
-    if(!amostra)
-        return true;
+    for(let i=0; i<valores.length; i++){
 
-    let valor =
-        amostra[indicador];
+        let valor =
+            valores[i][indicador];
 
-    return !isNaN(
-        parseFloat(
+        if(
+            valor === '' ||
+            valor === null ||
+            valor === undefined
+        ){
+            continue;
+        }
+
+        valor =
             String(valor)
-            .replace(",", ".")
-        )
-    );
+            .replace(",", ".");
+
+        return !isNaN(
+            parseFloat(valor)
+        );
+
+    }
+
+    return false;
 
 }
 
-// =====================
+// =====================================
 // QUARTIS
-// =====================
+// =====================================
 
 function calcularQuartis(indicador){
 
@@ -204,9 +190,9 @@ function calcularQuartis(indicador){
 
 }
 
-// =====================
+// =====================================
 // CORES NUMÉRICAS
-// =====================
+// =====================================
 
 function getColorNumerico(
     valor,
@@ -232,11 +218,19 @@ function getColorNumerico(
 
 }
 
-// =====================
+// =====================================
 // CORES CATEGÓRICAS
-// =====================
+// =====================================
 
 function getColorCategoria(valor){
+
+    if(
+        valor === null ||
+        valor === undefined ||
+        valor === ''
+    ){
+        return '#cccccc';
+    }
 
     let categorias =
         [...new Set(
@@ -245,6 +239,10 @@ function getColorCategoria(valor){
             .map(
                 d =>
                 d[indicadorAtual]
+            )
+            .filter(
+                d =>
+                d !== ''
             )
 
         )];
@@ -266,17 +264,19 @@ function getColorCategoria(valor){
     let indice =
         categorias.indexOf(valor);
 
-    return
-    paleta[
+    if(indice < 0)
+        return '#cccccc';
+
+    return paleta[
         indice %
         paleta.length
     ];
 
 }
 
-// =====================
+// =====================================
 // DESENHAR MAPA
-// =====================
+// =====================================
 
 function atualizarMapa(){
 
@@ -311,9 +311,7 @@ function atualizarMapa(){
             style:function(feature){
 
                 let nome =
-                    feature
-                    .properties
-                    .Name;
+                    feature.properties.Name;
 
                 let dado =
                     indicadores[nome];
@@ -322,13 +320,10 @@ function atualizarMapa(){
 
                     return {
 
-                        fillColor:
-                        '#cccccc',
-
-                        fillOpacity:
-                        0.5,
-
-                        color:'#333'
+                        fillColor:'#cccccc',
+                        fillOpacity:0.5,
+                        color:'#333',
+                        weight:1
 
                     };
 
@@ -338,49 +333,35 @@ function atualizarMapa(){
                     numerico
 
                     ? getColorNumerico(
-                        dado[
-                        indicadorAtual
-                        ],
+                        dado[indicadorAtual],
                         quartis
                       )
 
                     : getColorCategoria(
-                        dado[
-                        indicadorAtual
-                        ]
+                        dado[indicadorAtual]
                       );
 
                 return {
 
-                    fillColor:
-                    cor,
-
-                    fillOpacity:
-                    0.7,
-
+                    fillColor:cor,
+                    fillOpacity:0.7,
                     color:'#333',
-
                     weight:1
 
                 };
 
             },
 
-            onEachFeature:
-            function(
+            onEachFeature:function(
                 feature,
                 layer
             ){
 
                 let nome =
-                feature
-                .properties
-                .Name;
+                    feature.properties.Name;
 
                 let dado =
-                indicadores[
-                nome
-                ];
+                    indicadores[nome];
 
                 if(!dado)
                     return;
@@ -390,22 +371,16 @@ function atualizarMapa(){
                     nome +
                     '</b><hr>';
 
-                Object.keys(
-                    dado
-                ).forEach(
-                    campo => {
+                Object.keys(dado)
+                .forEach(campo => {
 
                     popup +=
 
                     '<b>' +
-
                     campo +
-
                     '</b>: ' +
 
-                    dado[campo]
-
-                    +
+                    dado[campo] +
 
                     '<br>';
 
@@ -419,25 +394,22 @@ function atualizarMapa(){
 
         });
 
-    camadaUBS
-    .addTo(map);
+    camadaUBS.addTo(map);
 
 }
 
-// =====================
+// =====================================
 // GERAR SELETOR
-// =====================
+// =====================================
 
 function gerarSeletor(){
 
     let select =
-    document
-    .getElementById(
-        'indicador'
-    );
+        document.getElementById(
+            'indicador'
+        );
 
-    select.innerHTML =
-    '';
+    select.innerHTML = '';
 
     let colunas =
         Object.keys(
@@ -446,27 +418,21 @@ function gerarSeletor(){
             )[0]
         );
 
-    colunas
-    .forEach(
-        coluna => {
+    colunas.forEach(coluna => {
 
-        if(
-            coluna ==
-            'Name'
-        )
+        if(coluna === 'Name')
             return;
 
         let option =
-        document
-        .createElement(
-            'option'
-        );
+            document.createElement(
+                'option'
+            );
 
         option.value =
-        coluna;
+            coluna;
 
         option.text =
-        coluna;
+            coluna;
 
         select.appendChild(
             option
@@ -474,32 +440,41 @@ function gerarSeletor(){
 
     });
 
-    indicadorAtual =
-        colunas[1];
+    if(!indicadorAtual){
+
+        indicadorAtual =
+            'Drop_Penta';
+
+    }
 
     select.value =
         indicadorAtual;
 
-    select
-    .addEventListener(
-        'change',
-
-        function(){
-
-            indicadorAtual =
-            this.value;
-
-            atualizarMapa();
-
-        }
-
-    );
-
 }
 
-// =====================
-// CARREGAR DADOS
-// =====================
+// =====================================
+// EVENTO SELECT
+// =====================================
+
+document
+.getElementById(
+    'indicador'
+)
+.addEventListener(
+    'change',
+    function(){
+
+        indicadorAtual =
+            this.value;
+
+        atualizarMapa();
+
+    }
+);
+
+// =====================================
+// CARREGAR PLANILHA
+// =====================================
 
 function carregarDados(){
 
@@ -519,34 +494,28 @@ function carregarDados(){
             results
         ){
 
-            indicadores =
-            {};
+            indicadores = {};
 
             results.data
-            .forEach(
-                row => {
+            .forEach(row => {
 
-                if(
-                    row.Name
-                ){
+                if(row.Name){
 
                     indicadores[
-                    row.Name
+                        row.Name
                     ] = row;
 
                 }
 
             });
 
-            if(
-                !indicadorAtual
-            ){
-
-                gerarSeletor();
-
-            }
+            gerarSeletor();
 
             atualizarMapa();
+
+            console.log(
+                'Planilha atualizada'
+            );
 
         }
 
@@ -554,49 +523,63 @@ function carregarDados(){
 
 }
 
-// =====================
-// GEOJSON
-// =====================
+// =====================================
+// CARREGAR GEOJSON
+// =====================================
 
-fetch('ubsmicroplanejamentogeojson_clean.geojson')
-
-.then(response => response.text())
-
-.then(text => {
-
-    console.log("Primeiros caracteres:");
-
-    console.log(text.substring(0,300));
-
-});
-
-.then(
-response =>
-response.json()
+fetch(
+    'ubsmicroplanejamentogeojson_clean.geojson'
 )
 
-.then(
-geojson => {
+.then(response => {
+
+    if(!response.ok){
+
+        throw new Error(
+            'Erro ao carregar GeoJSON'
+        );
+
+    }
+
+    return response.json();
+
+})
+
+.then(geojson => {
 
     geojsonData =
-    geojson;
+        geojson;
+
+    console.log(
+        'GeoJSON carregado'
+    );
 
     carregarDados();
 
-}
-);
+})
 
-// =====================
+.catch(error => {
+
+    console.error(
+        'Erro no mapa:',
+        error
+    );
+
+});
+
+// =====================================
 // AUTOATUALIZAÇÃO
-// =====================
+// =====================================
 
-setInterval(
+setInterval(() => {
 
-    carregarDados,
+    console.log(
+        'Atualizando planilha...'
+    );
 
-    60000
+    carregarDados();
 
-);
+}, 60000);
 
 </script>
 
