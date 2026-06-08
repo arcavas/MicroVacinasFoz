@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+
+<meta charset="utf-8">
+
+<title>Mapa UBS</title>
+
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+
+html, body {
+    margin: 0;
+    height: 100%;
+}
+
+#map {
+    height: 100%;
+}
+
+#controle {
+
+    position: absolute;
+
+    top: 10px;
+    left: 50px;
+
+    z-index: 1000;
+
+    background: rgb(47, 131, 183);
+
+    padding: 10px;
+
+    border-radius: 5px;
+
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.766);
+
+}
+
+#indicador {
+
+    font-size: 14px;
+    padding: 5px;
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div id="controle">
+
+<select id="indicador">
+
+<option value="Drop_Penta">
+Drop_Penta
+</option>
+
+<option value="DadosAPS_A">
+DadosAPS_A
+</option>
+
+<option value="DadosAPS_S">
+DadosAPS_S
+</option>
+
+<option value="DadosAPS_E">
+DadosAPS_E
+</option>
+
+<option value="DadosAPS_F">
+Faixa etária APS
+</option>
+
+</select>
+
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+<script>
+
+// ======================================
+// MAPA
+// ======================================
+
+// =====================
+// MAPA
+// =====================
+
+var map = L.map('map').setView(
+    [-25.54, -54.58],
+    11
+);
+
+L.tileLayer(
+'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+{
+ attribution:'© OpenStreetMap'
+}
+).addTo(map);
+
+// =====================
+// VARIÁVEIS GLOBAIS
+// =====================
+
+let indicadores = {};
+
+let geojsonData = null;
+
+let camadaUBS = null;
+
+let indicadorAtual = null;
+
+// =====================
+// PLANILHA
+// =====================
+
+const csvUrl =
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ83nMaB8cLLAZEwAicEhPeiuVPd89zsqMrS4T6-BtLNIYsH7LsU2jafFd4_OIDoULHl0Vv6raOBEG3/pub?gid=1960672355&single=true&output=csv';
+
+// =====================
+// DETECTAR TIPO
+// =====================
+
+function ehNumerico(indicador){
+
+    let amostra =
+        Object.values(indicadores)[0];
+
+    if(!amostra)
+        return true;
+
+    let valor =
+        amostra[indicador];
+
+    return !isNaN(
+        parseFloat(
+            String(valor)
+            .replace(",", ".")
+        )
+    );
+
+}
+
+// =====================
+// QUARTIS
+// =====================
+
+function calcularQuartis(indicador){
+
+    let valores = [];
+
+    Object.values(indicadores)
+    .forEach(row => {
+
+        let valor =
+            parseFloat(
+                String(
+                    row[indicador]
+                ).replace(",", ".")
+            );
+
+        if(!isNaN(valor))
+            valores.push(valor);
+
+    });
+
+    valores.sort((a,b)=>a-b);
+
+    return {
+
+        q1:
+        valores[
+            Math.floor(
+                valores.length * 0.25
+            )
+        ],
+
+        q2:
+        valores[
+            Math.floor(
+                valores.length * 0.50
+            )
+        ],
+
+        q3:
+        valores[
+            Math.floor(
+                valores.length * 0.75
+            )
+        ]
+
+    };
+
+}
+
+// =====================
+// CORES NUMÉRICAS
+// =====================
+
+function getColorNumerico(
+    valor,
+    quartis
+){
+
+    valor =
+        parseFloat(
+            String(valor)
+            .replace(",", ".")
+        );
+
+    if(isNaN(valor))
+        return '#cccccc';
+
+    return valor <= quartis.q1
+        ? '#ffffcc'
+        : valor <= quartis.q2
+        ? '#a1dab4'
+        : valor <= quartis.q3
+        ? '#41b6c4'
+        : '#225ea8';
+
+}
+
+// =====================
+// CORES CATEGÓRICAS
+// =====================
+
+function getColorCategoria(valor){
+
+    let categorias =
+        [...new Set(
+
+            Object.values(indicadores)
+            .map(
+                d =>
+                d[indicadorAtual]
+            )
+
+        )];
+
+    let paleta = [
+
+        '#e41a1c',
+        '#377eb8',
+        '#4daf4a',
+        '#984ea3',
+        '#ff7f00',
+        '#ffff33',
+        '#a65628',
+        '#f781bf',
+        '#999999'
+
+    ];
+
+    let indice =
+        categorias.indexOf(valor);
+
+    return
+    paleta[
+        indice %
+        paleta.length
+    ];
+
+}
+
+// =====================
+// DESENHAR MAPA
+// =====================
+
+function atualizarMapa(){
+
+    if(!geojsonData)
+        return;
+
+    if(camadaUBS){
+
+        map.removeLayer(
+            camadaUBS
+        );
+
+    }
+
+    let numerico =
+        ehNumerico(
+            indicadorAtual
+        );
+
+    let quartis =
+        numerico
+        ? calcularQuartis(
+            indicadorAtual
+          )
+        : null;
+
+    camadaUBS =
+        L.geoJSON(
+            geojsonData,
+            {
+
+            style:function(feature){
+
+                let nome =
+                    feature
+                    .properties
+                    .Name;
+
+                let dado =
+                    indicadores[nome];
+
+                if(!dado){
+
+                    return {
+
+                        fillColor:
+                        '#cccccc',
+
+                        fillOpacity:
+                        0.5,
+
+                        color:'#333'
+
+                    };
+
+                }
+
+                let cor =
+                    numerico
+
+                    ? getColorNumerico(
+                        dado[
+                        indicadorAtual
+                        ],
+                        quartis
+                      )
+
+                    : getColorCategoria(
+                        dado[
+                        indicadorAtual
+                        ]
+                      );
+
+                return {
+
+                    fillColor:
+                    cor,
+
+                    fillOpacity:
+                    0.7,
+
+                    color:'#333',
+
+                    weight:1
+
+                };
+
+            },
+
+            onEachFeature:
+            function(
+                feature,
+                layer
+            ){
+
+                let nome =
+                feature
+                .properties
+                .Name;
+
+                let dado =
+                indicadores[
+                nome
+                ];
+
+                if(!dado)
+                    return;
+
+                let popup =
+                    '<b>' +
+                    nome +
+                    '</b><hr>';
+
+                Object.keys(
+                    dado
+                ).forEach(
+                    campo => {
+
+                    popup +=
+
+                    '<b>' +
+
+                    campo +
+
+                    '</b>: ' +
+
+                    dado[campo]
+
+                    +
+
+                    '<br>';
+
+                });
+
+                layer.bindPopup(
+                    popup
+                );
+
+            }
+
+        });
+
+    camadaUBS
+    .addTo(map);
+
+}
+
+// =====================
+// GERAR SELETOR
+// =====================
+
+function gerarSeletor(){
+
+    let select =
+    document
+    .getElementById(
+        'indicador'
+    );
+
+    select.innerHTML =
+    '';
+
+    let colunas =
+        Object.keys(
+            Object.values(
+                indicadores
+            )[0]
+        );
+
+    colunas
+    .forEach(
+        coluna => {
+
+        if(
+            coluna ==
+            'Name'
+        )
+            return;
+
+        let option =
+        document
+        .createElement(
+            'option'
+        );
+
+        option.value =
+        coluna;
+
+        option.text =
+        coluna;
+
+        select.appendChild(
+            option
+        );
+
+    });
+
+    indicadorAtual =
+        colunas[1];
+
+    select.value =
+        indicadorAtual;
+
+    select
+    .addEventListener(
+        'change',
+
+        function(){
+
+            indicadorAtual =
+            this.value;
+
+            atualizarMapa();
+
+        }
+
+    );
+
+}
+
+// =====================
+// CARREGAR DADOS
+// =====================
+
+function carregarDados(){
+
+    Papa.parse(
+
+        csvUrl +
+        '&t=' +
+        Date.now(),
+
+        {
+
+        download:true,
+
+        header:true,
+
+        complete:function(
+            results
+        ){
+
+            indicadores =
+            {};
+
+            results.data
+            .forEach(
+                row => {
+
+                if(
+                    row.Name
+                ){
+
+                    indicadores[
+                    row.Name
+                    ] = row;
+
+                }
+
+            });
+
+            if(
+                !indicadorAtual
+            ){
+
+                gerarSeletor();
+
+            }
+
+            atualizarMapa();
+
+        }
+
+    });
+
+}
+
+// =====================
+// GEOJSON
+// =====================
+
+fetch(
+'UBSMicroplanejamentoGeojson_clean.geojson'
+)
+
+.then(
+response =>
+response.json()
+)
+
+.then(
+geojson => {
+
+    geojsonData =
+    geojson;
+
+    carregarDados();
+
+}
+);
+
+// =====================
+// AUTOATUALIZAÇÃO
+// =====================
+
+setInterval(
+
+    carregarDados,
+
+    60000
+
+);
+
+</script>
+
+</body>
+</html>
